@@ -9,10 +9,9 @@ const state = { q: '', filter: 'all', cat: '', sort: 'opportunity', country: 'US
 const FILTERS = [['all', 'All'], ['below', 'Below floor'], ['raise', 'Raise'], ['lower', 'Lower'], ['lowmargin', 'Low margin']];
 const STRATS = [['balanced', 'Balanced'], ['win', 'Win share'], ['protect', 'Protect margin']];
 
-// active-country plan for a product: full for core markets, compact otherwise.
-function cur(p) {
-  const cc = state.country;
-  if (p.countries[cc]) return p.countries[cc];  // _full has no flag; detect via .tiers
+// plan for a product in a specific country: full for core markets, compact otherwise.
+function getPlan(p, cc) {
+  if (p.countries[cc]) return p.countries[cc];  // full plan (has .tiers, .route_options)
   const c = p.all && p.all[cc];
   if (!c) return null;
   return {
@@ -23,6 +22,7 @@ function cur(p) {
     shipping_share: (c.sh != null && c.l) ? c.sh / c.l : null,
   };
 }
+const cur = p => getPlan(p, state.country);   // list uses the global country
 const isFull = plan => plan && !plan._compact;
 // the highlighted target price for the current strategy (compact = recommended only)
 function target(plan) {
@@ -157,7 +157,7 @@ function pnlHtml(route, price, rec) {
 }
 
 function renderRoutes() {
-  const { routes, sel, price, rec } = DETAIL;
+  const routes = DETAIL._routes, sel = DETAIL.sel, price = DETAIL.product.current_price, rec = DETAIL._rec;
   $('#routes').innerHTML = routes.map((r, i) => `<button class="route-chip ${i === sel ? 'on' : ''}" data-r="${i}">
     <div class="rc-l">${money(r.landed)}</div>
     <div class="rc-m">${(r.method || r.supplier || 'Route').slice(0, 18)}</div>
@@ -165,7 +165,13 @@ function renderRoutes() {
   </button>`).join('');
   $('#pnl').innerHTML = pnlHtml(routes[sel], price, rec);
 }
-function selectRoute(i) { if (DETAIL) { DETAIL.sel = i; renderRoutes(); } }
+function selectRoute(i) {
+  if (!DETAIL) return;
+  DETAIL.sel = i;
+  const s = $('#detail-card').scrollTop;
+  renderDetail();               // re-render so P&L + cost breakdown stay in sync
+  $('#detail-card').scrollTop = s;
+}
 
 // build the routes list from a plan (full → route_options; compact → the one cheapest route)
 function routesFor(plan) {
@@ -174,85 +180,88 @@ function routesFor(plan) {
             shipping: plan.shipping_cost, days_max: plan.days_max, premium: 0 }];
 }
 
-function openDetail(p) {
-  const plan = cur(p);
-  const countryName = (DATA.countries.find(c => c.code === state.country) || {}).name || state.country;
-  if (!isFull(plan)) { openCompact(p, plan, countryName); return; }
-  const t = target(plan), tgm = targetGm(plan, p.current_price);
-  const b = bandMark(plan, p.current_price);
-  const stratLabel = { balanced: 'Recommended', win: 'Win share', protect: 'Protect margin' }[state.strategy];
-  const tiers = plan.tiers.map(t => `<tr><td>${t.qty}</td><td>${money(t.unit_price)}</td><td>${t.pct_off ? t.pct_off + '%' : '—'}</td><td>${pct(t.gross_margin_pct)}</td></tr>`).join('');
-  const fast = plan.best_fast_route;
-  const fastLine = fast ? `<div class="kv"><span class="muted">Fastest good route</span><span>${fast.days_max}d · ${money(fast.landed)}${fast.premium > 0.5 ? ' (+' + money(fast.premium) + ')' : ''} <span style="color:var(--muted)">${fast.supplier}</span></span></div>` : '';
-  $('#detail-card').innerHTML = `
-    <div class="d-grip"></div>
-    <h2 class="d-title">${p.title || ''}</h2>
-    <div class="d-sub">${p.category} · ${plan.supplier || ''}${plan.days_max ? ' · ~' + plan.days_max + 'd' : ''} · ${state.country}</div>
-    <div class="d-hero">
-      <div class="col"><div class="k">Current</div><div class="v">${money(p.current_price)}</div><div class="k">${pct(plan.current_gm_pct)} GM</div></div>
-      <div class="to">→</div>
-      <div class="col"><div class="k">${stratLabel}</div><div class="v rec">${money(t)}</div><div class="k">${pct(tgm)} GM</div></div>
-    </div>
-    <div class="strat-note">Showing <b>${stratLabel}</b>. Balanced ${money(plan.recommended_price)} · Win share ${money(plan.price_to_win_share)} · Protect ${money(plan.price_protect_margin)}</div>
-    <div class="why">${plan.why}</div>
-    <div class="sec-h">Where it sits vs the market</div>
-    <div class="band">
-      <div class="band-track">
-        <div class="band-mark" style="left:${b.posCur}%;background:#b06a00"></div>
-        <div class="band-mark" style="left:${b.posRec}%"></div>
-      </div>
-      <div class="band-lbls"><span>floor ${money(plan.floor_price)}</span><span>market ${money(plan.market_ref)}</span></div>
-    </div>
-    <div class="sec-h">Everyday sale</div>
-    <div><span class="promo">${plan.everyday_sale}</span> <span class="muted" style="font-size:12px">${plan.promo_style === 'percent' ? '(% off reads bigger under $120)' : plan.promo_style === 'dollar' ? '($ off reads bigger above $120)' : ''}</span></div>
-    <div class="sec-h">Route &amp; P&amp;L${plan.route_options && plan.route_options.length > 1 ? ' — tap a route' : ''}</div>
-    <div id="routes" class="routes"></div>
-    <div id="pnl" class="pnl"></div>
-    <div class="sec-h">Volume tiers (off balanced price)</div>
-    <table class="tiers"><tr><th>Qty</th><th>Unit</th><th>Off</th><th>GM</th></tr>${tiers}</table>
-    <div class="sec-h">Cost breakdown</div>
-    <div class="kv"><span class="muted">Product cost</span><span>${money(plan.product_cost)}</span></div>
-    <div class="kv"><span class="muted">Shipping${plan.shipping_method ? ' · ' + plan.shipping_method : ''}</span><span>${money(plan.shipping_cost)}${plan.shipping_share != null ? ' <span style="color:var(--muted)">(' + Math.round(plan.shipping_share * 100) + '% of landed)</span>' : ''}</span></div>
-    <div class="kv"><span class="muted">Landed cost</span><span><b>${money(plan.landed_cost)}</b></span></div>
-    ${fastLine}
-    <div class="kv"><span class="muted">Margin floor (${pct(DATA.guardrails.floor_gm)})</span><span>${money(plan.floor_price)}</span></div>
-    ${plan.shipping_share > 0.6 ? '<div class="why" style="border-left-color:var(--warn);margin-top:12px">Shipping is ' + Math.round(plan.shipping_share * 100) + '% of landed. The lever is a cheaper route or a US-warehouse supplier, not just retail price' + (plan.route_options.length > 1 ? ' — tap the routes above to compare P&L' : '') + '.</div>' : ''}
-  `;
-  DETAIL = { routes: routesFor(plan), sel: 0, price: p.current_price, rec: t };
-  renderRoutes();
-  $('#detail').hidden = false;
-  document.body.style.overflow = 'hidden';
+const TIER_SCHED = [['1', 0], ['2-4', .05], ['5-9', .10], ['10-24', .15], ['25-49', .22], ['50-99', .28], ['100+', .35]];
+const countryName = cc => (DATA.countries.find(c => c.code === cc) || {}).name || cc;
+
+function computeTiers(landed, rec) {
+  const floor = landed / (1 - DATA.guardrails.min_tier_gm);
+  return TIER_SCHED.map(([qty, disc]) => {
+    const unit = Math.max(rec * (1 - disc), floor);
+    const gm = unit ? (unit - landed) / unit : null;
+    return { qty, unit, off: rec ? Math.round((1 - unit / rec) * 100) : 0, gm };
+  });
 }
-function openCompact(p, plan, countryName) {
-  const t = plan.recommended_price, tgm = targetGm(plan, p.current_price);
-  const productCost = (plan.landed_cost != null && plan.shipping_cost != null) ? plan.landed_cost - plan.shipping_cost : null;
-  const why = plan.below_floor
-    ? `At ${money(p.current_price)} you're BELOW your ${pct(DATA.guardrails.floor_gm)} floor for ${countryName} (${money(plan.floor_price)})${plan.current_gm_pct < 0 ? ' — you are LOSING money on orders here' : ''}.`
-    : plan.action === 'raise' ? `Room to raise for ${countryName}.` : `Healthy margin for ${countryName}.`;
-  $('#detail-card').innerHTML = `
-    <div class="d-grip"></div>
-    <h2 class="d-title">${p.title || ''}</h2>
-    <div class="d-sub">${p.category} · ${plan.supplier || ''}${plan.days_max ? ' · ~' + plan.days_max + 'd' : ''} · ${countryName}</div>
-    <div class="d-hero">
-      <div class="col"><div class="k">Current</div><div class="v">${money(p.current_price)}</div><div class="k">${pct(plan.current_gm_pct)} GM</div></div>
-      <div class="to">→</div>
-      <div class="col"><div class="k">Recommended</div><div class="v rec">${money(t)}</div><div class="k">${pct(tgm)} GM</div></div>
-    </div>
-    <div class="why">${why}</div>
-    <div class="sec-h">Route &amp; P&amp;L — ${countryName}</div>
-    <div id="routes" class="routes"></div>
-    <div id="pnl" class="pnl"></div>
-    <div class="sec-h">Cost breakdown — ${countryName}</div>
-    <div class="kv"><span class="muted">Product cost</span><span>${money(productCost)}</span></div>
-    <div class="kv"><span class="muted">Shipping (cheapest)</span><span>${money(plan.shipping_cost)}${plan.shipping_share != null ? ' <span style="color:var(--muted)">(' + Math.round(plan.shipping_share * 100) + '% of landed)</span>' : ''}</span></div>
-    <div class="kv"><span class="muted">Landed cost</span><span><b>${money(plan.landed_cost)}</b></span></div>
-    <div class="kv"><span class="muted">Margin floor (${pct(DATA.guardrails.floor_gm)})</span><span>${money(plan.floor_price)}</span></div>
-    <div class="strat-note">Landed-cost + margin view for ${countryName}. Full tiers, multiple route options and strategy pricing show in the core markets (US, CA, GB, DE, FR, JP, AE…).</div>
-  `;
-  DETAIL = { routes: routesFor(plan), sel: 0, price: p.current_price, rec: t };
-  renderRoutes();
+
+function shipToOptions(p) {
+  const codes = Object.keys(p.all || {});
+  const core = (DATA.core_countries || []).filter(c => codes.includes(c));
+  const rest = codes.filter(c => !(DATA.core_countries || []).includes(c)).sort((a, b) => countryName(a).localeCompare(countryName(b)));
+  const opt = c => `<option value="${c}" ${c === DETAIL.cc ? 'selected' : ''}>${countryName(c)}</option>`;
+  return `<optgroup label="Core markets">${core.map(opt).join('')}</optgroup>` +
+    (rest.length ? `<optgroup label="Any destination">${rest.map(opt).join('')}</optgroup>` : '');
+}
+
+function openDetail(p) {
+  DETAIL = { product: p, cc: state.country, sel: 0 };
+  renderDetail();
   $('#detail').hidden = false;
   document.body.style.overflow = 'hidden';
+  $('#detail-card').scrollTop = 0;
+}
+
+function renderDetail() {
+  const p = DETAIL.product, cc = DETAIL.cc, nm = countryName(cc);
+  const plan = getPlan(p, cc);
+  const shipField = `<div class="d-field"><label>Ship to</label><select id="d-shipto" class="sel">${shipToOptions(p)}</select></div>`;
+  const head = `
+    <button class="d-close" data-close aria-label="Back">✕</button>
+    <div class="d-head">
+      ${p.image ? `<img class="d-img" src="${p.image}" alt="">` : ''}
+      <div class="d-headmeta">
+        <h2 class="d-title">${p.title || ''}</h2>
+        <div class="d-sub">${p.category}${plan && plan.supplier ? ' · ' + plan.supplier : ''}</div>
+      </div>
+    </div>`;
+  if (!plan) {
+    $('#detail-card').innerHTML = head + shipField + `<div class="empty">Not shipped to ${nm}.</div>`;
+    return;
+  }
+  const routes = routesFor(plan);
+  DETAIL.sel = Math.min(DETAIL.sel, routes.length - 1);
+  const rec = target(plan);
+  const recGm = (rec && plan.landed_cost != null) ? (rec - plan.landed_cost) / rec : null;
+  const productCost = (plan.landed_cost != null && plan.shipping_cost != null) ? plan.landed_cost - plan.shipping_cost : null;
+  const tiers = computeTiers(plan.landed_cost, rec);
+  const tierRows = tiers.map(t => `<tr><td>${t.qty}</td><td>${money(t.unit)}</td><td>${t.off ? t.off + '%' : '—'}</td><td>${pct(t.gm)}</td></tr>`).join('');
+  const badge = plan.below_floor ? `<span class="badge b-floor">BELOW FLOOR</span>`
+    : plan.action === 'raise' ? `<span class="badge b-raise">RAISE</span>`
+    : plan.action === 'lower' ? `<span class="badge b-lower">LOWER</span>` : `<span class="badge b-hold">ON TARGET</span>`;
+  DETAIL._routes = routes; DETAIL._rec = rec;
+
+  $('#detail-card').innerHTML = head + `
+    <div class="d-priceline"><span class="price-cur">${money(p.current_price)}</span> <span class="arrow">→</span> <span class="price-rec">${money(rec)}</span> ${badge}</div>
+    ${shipField}
+    <div class="sec-h">Shipping route${routes.length > 1 ? ' — tap to compare' : ''}</div>
+    <div id="routes" class="routes"></div>
+    <div class="sec-h">P&amp;L per unit — ${nm}</div>
+    <div id="pnl" class="pnl"></div>
+    <div class="sec-h">Suggested price</div>
+    <div class="rec-box">
+      <div class="rec-main">${money(rec)} <small>${pct(recGm)} margin</small></div>
+      <div class="rec-why">${plan.why || ''}</div>
+      ${isFull(plan) ? `<div class="rec-alts">Balanced ${money(plan.recommended_price)} · Win share ${money(plan.price_to_win_share)} · Protect ${money(plan.price_protect_margin)}</div>` : ''}
+    </div>
+    <div class="sec-h">Tier pricing — how to discount by volume</div>
+    <table class="tiers"><tr><th>Qty</th><th>Unit price</th><th>Off</th><th>Margin</th></tr>${tierRows}</table>
+    <div class="rec-why" style="margin-top:8px">Everyday sale: <b>${plan.everyday_sale || (rec < 120 ? '15% off' : '$' + Math.round(rec * 0.15 / 5) * 5 + ' off')}</b>${rec < 120 ? ' — % off reads bigger under $120' : ' — $ off reads bigger over $120'}. Deepest tier still clears ${pct(DATA.guardrails.min_tier_gm)} margin.</div>
+    <div class="sec-h">Cost breakdown — ${nm}</div>
+    <div class="kv"><span class="muted">Product cost</span><span>${money(productCost)}</span></div>
+    <div class="kv"><span class="muted">Shipping (selected route)</span><span>${money(routes[DETAIL.sel].shipping)}</span></div>
+    <div class="kv"><span class="muted">Landed cost</span><span><b>${money(plan.landed_cost)}</b></span></div>
+    <div class="kv"><span class="muted">Margin floor (${pct(DATA.guardrails.floor_gm)})</span><span>${money(plan.floor_price)}</span></div>
+    ${plan.shipping_share > 0.6 ? `<div class="why" style="border-left-color:var(--warn);margin-top:12px">Shipping is ${Math.round(plan.shipping_share * 100)}% of landed here — a cheaper route or a US-warehouse supplier is the real lever, not just retail price.</div>` : ''}
+  `;
+  renderRoutes();
 }
 function closeDetail() { $('#detail').hidden = true; document.body.style.overflow = ''; DETAIL = null; }
 
@@ -269,7 +278,10 @@ function wire() {
   $('#detail').addEventListener('click', e => {
     const chip = e.target.closest('.route-chip');
     if (chip) { selectRoute(+chip.dataset.r); return; }
-    if (e.target.dataset.close !== undefined) closeDetail();
+    if (e.target.closest('[data-close]')) closeDetail();
+  });
+  $('#detail').addEventListener('change', e => {
+    if (e.target.id === 'd-shipto') { DETAIL.cc = e.target.value; DETAIL.sel = 0; renderDetail(); $('#detail-card').scrollTop = 0; }
   });
   window.addEventListener('online', () => $('#offline').hidden = true);
   window.addEventListener('offline', () => $('#offline').hidden = false);
