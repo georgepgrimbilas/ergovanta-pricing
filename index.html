@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#273755" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="EG Pricing" />
+<link rel="apple-touch-icon" href="./icon-192.png" />
+<link rel="manifest" href="./manifest.webmanifest" />
+<link rel="stylesheet" href="./styles.css" />
+<title>Ergovanta Pricing</title>
+</head>
+<body>
+<div id="lock" class="lock" hidden>
+  <div class="lock-card">
+    <div class="lock-brand">Ergovanta</div>
+    <div class="lock-title">Pricing Brain</div>
+    <p class="lock-sub">Enter your passcode</p>
+    <input id="pin" class="lock-pin" type="password" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="passcode" />
+    <button id="unlock" class="lock-btn">Unlock</button>
+    <label class="lock-remember"><input id="remember" type="checkbox" checked /> Remember on this device</label>
+    <div id="lockerr" class="lock-err"></div>
+  </div>
+</div>
+<div id="offline" class="offline-bar" hidden>Offline — showing last saved data</div>
+
+<header class="app-header">
+  <div class="brand">Ergovanta</div>
+  <div class="sub">Pricing Brain <span id="built" class="built"></span></div>
+</header>
+
+<section id="summary" class="summary"></section>
+
+<div class="controls">
+  <input id="search" class="search" type="search" placeholder="Search products…" autocomplete="off" />
+  <div class="segrow">
+    <div id="strategy" class="seg"></div>
+    <select id="country" class="sel country"></select>
+  </div>
+  <div id="chips" class="chips"></div>
+  <div class="row2">
+    <select id="cat" class="sel"></select>
+    <select id="sort" class="sel">
+      <option value="opportunity">Sort: Biggest opportunity</option>
+      <option value="marginLow">Sort: Lowest margin first</option>
+      <option value="priceHigh">Sort: Price high→low</option>
+      <option value="priceLow">Sort: Price low→high</option>
+      <option value="az">Sort: A→Z</option>
+    </select>
+  </div>
+</div>
+
+<main id="list" class="list"></main>
+
+<div id="detail" class="sheet" hidden>
+  <div class="sheet-bg" data-close></div>
+  <div class="sheet-card" id="detail-card"></div>
+</div>
+
+<footer class="foot">Prices are best-guess targets grounded in web comps + your live landed cost. Always above your margin floor.</footer>
+
+<script src="./app.js"></script>
+</body>
+</html>
