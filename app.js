@@ -43,7 +43,7 @@ function opportunity(p) {
 
 function passes(p) {
   const plan = cur(p); if (!plan) return false;
-  if (state.cat && p.category !== state.cat) return false;
+  if (state.cat && !(p.categories || [p.category]).includes(state.cat)) return false;
   const t = target(plan), diff = (t || 0) - (p.current_price || 0);
   const action = diff > 1 ? 'raise' : diff < -1 ? 'lower' : 'hold';
   if (state.filter === 'below' && !plan.below_floor) return false;
@@ -100,8 +100,8 @@ function renderControls() {
   $('#country').innerHTML =
     `<optgroup label="Core markets (full detail)">${core.map(opt).join('')}</optgroup>` +
     (rest.length ? `<optgroup label="Any destination (landed + margin)">${rest.map(opt).join('')}</optgroup>` : '');
-  const cats = [...new Set(DATA.products.map(p => p.category))].sort();
-  $('#cat').innerHTML = `<option value="">All categories</option>` + cats.map(c => `<option value="${c}">${c[0].toUpperCase() + c.slice(1)}</option>`).join('');
+  const cats = DATA.category_list || [...new Set(DATA.products.map(p => p.category))].sort();
+  $('#cat').innerHTML = `<option value="">All categories</option>` + cats.map(c => `<option value="${c}">${c}</option>`).join('');
 }
 
 function card(p, i) {

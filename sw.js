@@ -1,5 +1,5 @@
 // Cache version is bumped by build_pricing_app.py on every build.
-const CACHE = 'eg-pricing-20260701212218-792e10';
+const CACHE = 'eg-pricing-20260701225908-b87334';
 // App shell (no data file here — data is cached at runtime so the same SW works
 // for both the plaintext (data.json) and encrypted (data.enc.json) bundles).
 const SHELL = [
