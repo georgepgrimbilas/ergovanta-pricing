@@ -183,10 +183,11 @@ function routesFor(plan) {
 const TIER_SCHED = [['1', 0], ['2-4', .05], ['5-9', .10], ['10-24', .15], ['25-49', .22], ['50-99', .28], ['100+', .35]];
 const countryName = cc => (DATA.countries.find(c => c.code === cc) || {}).name || cc;
 
+const charm95 = v => v < 100 ? Math.max(0.95, Math.ceil(v) - 0.05) : Math.ceil(v / 5) * 5 - 0.05;
 function computeTiers(landed, rec) {
   const floor = landed / (1 - DATA.guardrails.min_tier_gm);
   return TIER_SCHED.map(([qty, disc]) => {
-    const unit = Math.max(rec * (1 - disc), floor);
+    const unit = charm95(Math.max(rec * (1 - disc), floor));   // ends in .95, stays >= floor
     const gm = unit ? (unit - landed) / unit : null;
     return { qty, unit, off: rec ? Math.round((1 - unit / rec) * 100) : 0, gm };
   });
