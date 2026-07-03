@@ -2,6 +2,7 @@
 const $ = (s, r = document) => r.querySelector(s);
 const money = n => (n == null ? '—' : '$' + Number(n).toLocaleString('en-US', { minimumFractionDigits: n % 1 ? 2 : 0, maximumFractionDigits: 2 }));
 const pct = n => (n == null ? '—' : Math.round(n * 100) + '%');
+const fmtBuilt = iso => { const p = (iso || '').slice(0, 10).split('-'); const mo = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][(+p[1]) - 1]; return mo ? `${mo} ${+p[2]}, ${p[0]}` : (iso || '').slice(0, 10); };
 
 let DATA = null;
 const state = { q: '', filter: 'all', cat: '', sort: 'opportunity', country: 'US', strategy: 'balanced' };
@@ -115,8 +116,8 @@ function card(p, i) {
       ${badge(p)}
     </div>
     <div class="right">
-      <div class="price-cur">${money(p.current_price)}</div>
-      <div class="price-rec">${money(target(plan))}</div>
+      <div class="price-dtc">${money(p.current_price)}</div>
+      <div class="price-lbl">DTC single</div>
     </div>
   </div>`;
 }
@@ -193,6 +194,39 @@ function computeTiers(landed, rec) {
   });
 }
 
+// Which live Kaching deal a product falls under (drives the retail bundle ladder).
+function dealFor(p) {
+  const c = p.categories || [];
+  if (c.includes('Decor')) return 'decor';
+  if (c.includes('Workspace Essentials')) return 'workspace';
+  return 'qty';
+}
+// Live Kaching retail bundle prices — discount off the DTC single price (that's
+// exactly how Kaching computes them). Not charm-rounded: shows the true charge.
+function kachingTiers(price, landed, p) {
+  if (price == null) return [];
+  const deal = dealFor(p);
+  const spec = deal === 'decor' ? [['Any 3+ mixed', .15]]
+    : deal === 'workspace' ? [['Any 3+ mixed', .15], ['Any 5+', .20]]
+    : [['2', .10], ['3', .15], ['5', .20], ['10', .25]];
+  return spec.map(([qty, disc]) => {
+    const unit = Math.round(price * (1 - disc) * 100) / 100;
+    return { qty, off: Math.round(disc * 100), unit, gm: unit ? (unit - landed) / unit : null };
+  });
+}
+// Hypothetical bulk / B2B quote ladder beyond the retail bundles, clamped to the
+// tier margin floor so a quote never goes underwater.
+const VOLUME_SPEC = [['11-24', .28], ['25-49', .32], ['50-100', .36], ['101+', .40]];
+function volumeTiers(price, landed) {
+  if (price == null) return [];
+  const floor = landed / (1 - (DATA.guardrails.min_tier_gm || .22));
+  return VOLUME_SPEC.map(([qty, disc]) => {
+    const raw = price * (1 - disc), unit = Math.round(Math.max(raw, floor) * 100) / 100;
+    return { qty, off: price ? Math.round((1 - unit / price) * 100) : 0,
+             unit, gm: unit ? (unit - landed) / unit : null, atFloor: raw < floor };
+  });
+}
+
 function shipToOptions(p) {
   const codes = Object.keys(p.all || {});
   const core = (DATA.core_countries || []).filter(c => codes.includes(c));
@@ -232,15 +266,17 @@ function renderDetail() {
   const rec = target(plan);
   const recGm = (rec && plan.landed_cost != null) ? (rec - plan.landed_cost) / rec : null;
   const productCost = (plan.landed_cost != null && plan.shipping_cost != null) ? plan.landed_cost - plan.shipping_cost : null;
-  const tiers = computeTiers(plan.landed_cost, rec);
-  const tierRows = tiers.map(t => `<tr><td>${t.qty}</td><td>${money(t.unit)}</td><td>${t.off ? t.off + '%' : '—'}</td><td>${pct(t.gm)}</td></tr>`).join('');
+  const kt = kachingTiers(p.current_price, plan.landed_cost, p);
+  const vt = volumeTiers(p.current_price, plan.landed_cost);
+  const ktRows = kt.map(t => `<tr><td>${t.qty}</td><td>${money(t.unit)} <span class="tmute">/ea</span></td><td>${t.off}%</td><td>${pct(t.gm)}</td></tr>`).join('');
+  const vtRows = vt.map(t => `<tr><td>${t.qty}</td><td>${money(t.unit)} <span class="tmute">/ea</span></td><td>${t.off}%${t.atFloor ? '*' : ''}</td><td>${pct(t.gm)}</td></tr>`).join('');
   const badge = plan.below_floor ? `<span class="badge b-floor">BELOW FLOOR</span>`
     : plan.action === 'raise' ? `<span class="badge b-raise">RAISE</span>`
     : plan.action === 'lower' ? `<span class="badge b-lower">LOWER</span>` : `<span class="badge b-hold">ON TARGET</span>`;
   DETAIL._routes = routes; DETAIL._rec = rec;
 
   $('#detail-card').innerHTML = head + `
-    <div class="d-priceline"><span class="price-cur">${money(p.current_price)}</span> <span class="arrow">→</span> <span class="price-rec">${money(rec)}</span> ${badge}</div>
+    <div class="d-priceline"><span class="price-dtc">${money(p.current_price)}</span> <span class="d-dtc-lbl">DTC single</span> ${badge}</div>
     ${shipField}
     <div class="sec-h">Shipping route${routes.length > 1 ? ' — tap to compare' : ''}</div>
     <div id="routes" class="routes"></div>
@@ -252,9 +288,11 @@ function renderDetail() {
       <div class="rec-why">${plan.why || ''}</div>
       ${isFull(plan) ? `<div class="rec-alts">Balanced ${money(plan.recommended_price)} · Win share ${money(plan.price_to_win_share)} · Protect ${money(plan.price_protect_margin)}</div>` : ''}
     </div>
-    <div class="sec-h">Tier pricing — how to discount by volume</div>
-    <table class="tiers"><tr><th>Qty</th><th>Unit price</th><th>Off</th><th>Margin</th></tr>${tierRows}</table>
-    <div class="rec-why" style="margin-top:8px">Everyday sale: <b>${plan.everyday_sale || (rec < 120 ? '15% off' : '$' + Math.round(rec * 0.15 / 5) * 5 + ' off')}</b>${rec < 120 ? ' — % off reads bigger under $120' : ' — $ off reads bigger over $120'}. Deepest tier still clears ${pct(DATA.guardrails.min_tier_gm)} margin.</div>
+    <div class="sec-h">Kaching bundle — live retail (off ${money(p.current_price)})</div>
+    <table class="tiers"><tr><th>Buy</th><th>Unit price</th><th>Off</th><th>Margin</th></tr>${ktRows}</table>
+    <div class="sec-h">Volume quote — hypothetical bulk</div>
+    <table class="tiers"><tr><th>Qty</th><th>Unit price</th><th>Off</th><th>Margin</th></tr>${vtRows}</table>
+    <div class="rec-why" style="margin-top:8px">Top table = your <b>live Kaching bundle</b> discounts off the DTC single price (what customers actually pay). Bottom = <b>hypothetical bulk quotes</b> for B2B; <b>*</b> = clamped to the ${pct(DATA.guardrails.min_tier_gm)} margin floor so a quote never goes underwater.</div>
     <div class="sec-h">Cost breakdown — ${nm}</div>
     <div class="kv"><span class="muted">Product cost</span><span>${money(productCost)}</span></div>
     <div class="kv"><span class="muted">Shipping (selected route)</span><span>${money(routes[DETAIL.sel].shipping)}</span></div>
@@ -309,7 +347,7 @@ async function decryptData(enc, pin) {
   return JSON.parse(new TextDecoder().decode(pt));
 }
 function startApp() {
-  $('#built').textContent = '· updated ' + (DATA.built_at || '').slice(0, 10);
+  $('#built').textContent = DATA.built_at ? '· synced ' + fmtBuilt(DATA.built_at) : '';
   renderControls(); rerender(); wire();
 }
 async function tryUnlock(enc, pin, remember) {

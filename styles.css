@@ -56,6 +56,10 @@ body{padding-bottom:40px}
 .card .right{text-align:right;flex:none}
 .price-cur{font-size:12px;color:var(--muted);text-decoration:line-through}
 .price-rec{font-size:18px;font-weight:700;font-family:Inter}
+.price-dtc{font-size:19px;font-weight:700;color:var(--navy);font-family:Inter;line-height:1}
+.price-lbl{font-size:8.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-top:2px}
+.d-priceline .price-dtc{font-size:26px}
+.d-dtc-lbl{font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);font-weight:700}
 .badge{display:inline-block;font-size:10px;font-weight:700;padding:2px 6px;border-radius:6px;margin-top:3px;letter-spacing:.3px}
 .b-raise{background:#e6f4ec;color:var(--good)} .b-lower{background:#fdf0e0;color:var(--lower)}
 .b-hold{background:#eef0f4;color:var(--navy)} .b-floor{background:#fbe6e4;color:var(--bad)}
@@ -102,6 +106,7 @@ table.tiers{width:100%;border-collapse:collapse;font-size:13px}
 table.tiers th,table.tiers td{padding:8px 6px;text-align:right;border-bottom:1px solid var(--bord)}
 table.tiers th{font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.3px;font-weight:600}
 table.tiers td:first-child,table.tiers th:first-child{text-align:left;font-weight:600}
+table.tiers .tmute{color:var(--muted);font-size:10px;font-weight:400}
 .promo{display:inline-block;background:var(--navy);color:#fff;border-radius:8px;padding:8px 14px;font-weight:700;font-size:15px;margin-top:4px}
 .kv{display:flex;justify-content:space-between;font-size:13px;padding:6px 0;border-bottom:1px solid var(--bord)}
 .kv .muted{color:var(--muted)}
