@@ -1,5 +1,5 @@
 // Cache version is bumped by build_pricing_app.py on every build.
-const CACHE = 'eg-pricing-20260703185226-68c6fc';
+const CACHE = 'eg-pricing-20260703185226-ba0591';
 // App shell (no data file here — data is cached at runtime so the same SW works
 // for both the plaintext (data.json) and encrypted (data.enc.json) bundles).
 const SHELL = [
@@ -32,6 +32,12 @@ self.addEventListener('fetch', e => {
     );
     return;
   }
-  // Everything else in scope: cache-first (offline app shell), network fallback.
-  e.respondWith(caches.match(e.request).then(r => r || fetch(e.request)));
+  // App shell: network-first when online (so a code update shows on the NEXT
+  // refresh, not after a double-reload), falling back to cache when offline.
+  e.respondWith(
+    fetch(e.request).then(r => {
+      if (r && r.ok) { const copy = r.clone(); caches.open(CACHE).then(c => c.put(e.request, copy)); }
+      return r;
+    }).catch(() => caches.match(e.request).then(r => r || caches.match('./index.html')))
+  );
 });
