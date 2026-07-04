@@ -5,7 +5,7 @@ const pct = n => (n == null ? '—' : Math.round(n * 100) + '%');
 const fmtBuilt = iso => { const p = (iso || '').slice(0, 10).split('-'); const mo = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][(+p[1]) - 1]; return mo ? `${mo} ${+p[2]}, ${p[0]}` : (iso || '').slice(0, 10); };
 
 let DATA = null;
-const state = { q: '', cat: '', sort: 'az', country: 'US', commRate: null };
+const state = { q: '', cat: '', sort: 'az', country: 'US', commRate: null, view: 'products' };
 
 // plan for a product in a specific country: full for core markets, compact otherwise.
 function getPlan(p, cc) {
@@ -87,6 +87,33 @@ function renderList() {
   el.innerHTML = VIEW.length ? VIEW.map((p, i) => card(p, i)).join('')
     : `<div class="empty">No products match${state.country !== 'US' ? ' for ' + state.country : ''}.</div>`;
 }
+
+// --- Commission grid tab: every product's rep economics at one toggleable rate ---
+function renderCommGrid() {
+  const rows = sortRows(DATA.products.filter(passes));
+  const chips = COMM_OPTS.map(r => `<button class="ctog ${((state.commRate == null && r == null) || state.commRate === r) ? 'on' : ''}" data-cr="${r == null ? '' : r}">${r == null ? 'Schedule (by category)' : Math.round(r * 100) + '%'}</button>`).join('');
+  const body = rows.map(p => {
+    const plan = cur(p); if (!plan) return '';
+    const c = commission(p, plan); if (!c) return '';
+    const netD = p.current_price - plan.landed_cost - c.repList;
+    return `<tr><td class="cg-name">${(p.title || '').split(' - ')[0]}</td><td>${money(p.current_price)}</td><td>${money(c.repList)}</td><td>${money(netD)}</td><td>${pct(c.netList)}</td><td>${money(c.floor)}</td></tr>`;
+  }).join('');
+  $('#list').innerHTML = `<div class="comm-toggle">${chips}</div>
+    <div class="cg-wrap"><table class="cg">
+      <thead><tr><th>Product</th><th>Price</th><th>Rep $</th><th>Net $</th><th>Net %</th><th>Floor</th></tr></thead>
+      <tbody>${body || `<tr><td colspan="6" class="empty" style="padding:24px">No products match.</td></tr>`}</tbody>
+    </table></div>`;
+}
+function renderCommSummary() {
+  const rows = DATA.products.filter(p => cur(p));
+  let rep = 0, net = 0, rev = 0;
+  for (const p of rows) { const plan = cur(p), c = commission(p, plan); if (!c) continue; rep += c.repList; net += (p.current_price - plan.landed_cost - c.repList); rev += p.current_price; }
+  $('#summary').innerHTML = `
+    <div class="stat"><div class="n">${money(Math.round(rep))}</div><div class="l">Rep earns · 1 ea</div></div>
+    <div class="stat"><div class="n good">${money(Math.round(net))}</div><div class="l">Your net · 1 ea</div></div>
+    <div class="stat"><div class="n">${pct(rev ? net / rev : null)}</div><div class="l">Net margin</div></div>`;
+}
+function renderView() { if (state.view === 'commission') renderCommGrid(); else renderList(); }
 
 // --- Route selection + P&L ---
 let DETAIL = null;   // { routes, sel, price }
@@ -272,14 +299,27 @@ function renderDetail() {
 }
 function closeDetail() { $('#detail').hidden = true; document.body.style.overflow = ''; DETAIL = null; }
 
-function rerender() { renderSummary(); renderList(); }
+function rerender() {
+  if (state.view === 'commission') { renderCommSummary(); renderCommGrid(); }
+  else { renderSummary(); renderList(); }
+}
 
 function wire() {
-  $('#search').addEventListener('input', e => { state.q = e.target.value; renderList(); });
+  $('#search').addEventListener('input', e => { state.q = e.target.value; renderView(); });
   $('#country').addEventListener('change', e => { state.country = e.target.value; rerender(); });
-  $('#cat').addEventListener('change', e => { state.cat = e.target.value; renderList(); });
-  $('#sort').addEventListener('change', e => { state.sort = e.target.value; renderList(); });
-  $('#list').addEventListener('click', e => { const c = e.target.closest('.card'); if (c) openDetail(VIEW[+c.dataset.i]); });
+  $('#cat').addEventListener('change', e => { state.cat = e.target.value; renderView(); });
+  $('#sort').addEventListener('change', e => { state.sort = e.target.value; renderView(); });
+  $('#tabs').addEventListener('click', e => {
+    const t = e.target.closest('.tab'); if (!t) return;
+    state.view = t.dataset.view;
+    document.querySelectorAll('#tabs .tab').forEach(b => b.classList.toggle('on', b === t));
+    rerender();
+  });
+  $('#list').addEventListener('click', e => {
+    const ct = e.target.closest('.ctog');
+    if (ct) { state.commRate = ct.dataset.cr === '' ? null : +ct.dataset.cr; rerender(); return; }
+    const c = e.target.closest('.card'); if (c) openDetail(VIEW[+c.dataset.i]);
+  });
   $('#detail').addEventListener('click', e => {
     const chip = e.target.closest('.route-chip');
     if (chip) { selectRoute(+chip.dataset.r); return; }
