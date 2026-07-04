@@ -109,7 +109,7 @@ function renderCommGrid() {
     const unit = tierUnit(list, land);
     const repEa = unit * rate, netEa = unit - land - repEa, netPct = unit ? netEa / unit : null;
     const floor = Math.min(list, floor95(land / (1 - COMM_MIN_NET - rate)));
-    return `<tr><td class="cg-name">${p.title || ''}</td><td>${money(unit)}</td><td>${money(repEa)}</td><td>${money(netEa)}</td><td>${pct(netPct)}</td><td>${money(repEa * qty)}</td><td>${money(netEa * qty)}</td><td>${money(floor)}</td></tr>`;
+    return `<tr><td class="cg-name">${p.title || ''}</td><td>${money(unit)}</td><td class="cg-cost">−${money(land)}</td><td class="cg-cost">−${money(repEa)}</td><td class="cg-net">${money(netEa)}</td><td>${pct(netPct)}</td><td class="cg-cost">−${money(repEa * qty)}</td><td class="cg-net">${money(netEa * qty)}</td><td>${money(floor)}</td></tr>`;
   }).join('');
   $('#list').innerHTML = `
     <div class="grid-ctrls">
@@ -117,8 +117,8 @@ function renderCommGrid() {
       <div class="gc-row"><span class="gc-lbl">Qty</span><div class="chips-inline">${tierChips}</div></div>
     </div>
     <div class="cg-wrap"><table class="cg">
-      <thead><tr><th>Product</th><th>Unit</th><th>Rep/ea</th><th>Net/ea</th><th>Net %</th><th>Rep ×${qty}</th><th>Net ×${qty}</th><th>Floor</th></tr></thead>
-      <tbody>${body || `<tr><td colspan="8" class="empty" style="padding:24px">No products.</td></tr>`}</tbody>
+      <thead><tr><th>Product</th><th>Unit</th><th>Cost</th><th>Rep/ea</th><th>You keep/ea</th><th>Net %</th><th>Rep ×${qty}</th><th>You keep ×${qty}</th><th>Floor</th></tr></thead>
+      <tbody>${body || `<tr><td colspan="9" class="empty" style="padding:24px">No products.</td></tr>`}</tbody>
     </table></div>`;
 }
 function renderCommSummary() {

@@ -37,6 +37,8 @@ body{padding-bottom:40px}
 .cg td:first-child,.cg th:first-child{text-align:left;font-weight:600;position:sticky;left:0;background:#fff}
 .cg th:first-child{background:var(--off)}
 .cg-name{max-width:160px;white-space:normal;line-height:1.2}
+.cg .cg-cost{color:var(--muted)}
+.cg .cg-net{color:var(--good);font-weight:700}
 .grid-ctrls{margin-bottom:10px}
 .gc-row{display:flex;align-items:flex-start;gap:8px;margin-bottom:6px}
 .gc-lbl{font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);font-weight:700;flex:0 0 26px;padding-top:6px}
