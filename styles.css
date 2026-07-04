@@ -107,6 +107,9 @@ table.tiers th,table.tiers td{padding:8px 6px;text-align:right;border-bottom:1px
 table.tiers th{font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.3px;font-weight:600}
 table.tiers td:first-child,table.tiers th:first-child{text-align:left;font-weight:600}
 .tmute{color:var(--muted);font-size:10px;font-weight:400}
+.comm-toggle{display:flex;gap:6px;flex-wrap:wrap;margin:2px 0 10px}
+.ctog{border:1px solid var(--bord);background:#fff;color:var(--char);border-radius:999px;padding:5px 12px;font-size:12px;font-weight:600}
+.ctog.on{background:var(--navy);color:#fff;border-color:var(--navy)}
 .promo{display:inline-block;background:var(--navy);color:#fff;border-radius:8px;padding:8px 14px;font-weight:700;font-size:15px;margin-top:4px}
 .kv{display:flex;justify-content:space-between;font-size:13px;padding:6px 0;border-bottom:1px solid var(--bord)}
 .kv .muted{color:var(--muted)}

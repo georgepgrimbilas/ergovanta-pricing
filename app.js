@@ -5,7 +5,7 @@ const pct = n => (n == null ? '—' : Math.round(n * 100) + '%');
 const fmtBuilt = iso => { const p = (iso || '').slice(0, 10).split('-'); const mo = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][(+p[1]) - 1]; return mo ? `${mo} ${+p[2]}, ${p[0]}` : (iso || '').slice(0, 10); };
 
 let DATA = null;
-const state = { q: '', cat: '', sort: 'az', country: 'US' };
+const state = { q: '', cat: '', sort: 'az', country: 'US', commRate: null };
 
 // plan for a product in a specific country: full for core markets, compact otherwise.
 function getPlan(p, cc) {
@@ -180,6 +180,7 @@ function volumeTiers(price, landed) {
 const COMM_LOW = ['Office Chairs', 'Desks', 'Ergonomics & Comfort'];        // 6%
 const COMM_MID = ['Workspace Essentials', 'Monitor & Laptop Stands', 'Tech & Device Accessories', 'Faux Plants']; // 10%
 const COMM_MIN_NET = 0.20;   // company keeps >=20% net at the floor, after commission
+const COMM_OPTS = [null, 0.05, 0.10, 0.15, 0.20];   // null = the category's Schedule A rate
 const floor95 = v => Math.ceil(v - 0.95) + 0.95;
 function commBand(p) {
   const c = p.categories || [p.category];
@@ -191,10 +192,11 @@ function commission(p, plan) {
   const price = p.current_price, land = plan.landed_cost;
   if (price == null || land == null) return null;
   const b = commBand(p);
-  const floor = Math.min(price, floor95(land / (1 - COMM_MIN_NET - b.rate)));
-  return { name: b.name, rate: b.rate, floor,
-    repList: price * b.rate, netList: (price - land - price * b.rate) / price,
-    repFloor: floor * b.rate, netFloor: (floor - land - floor * b.rate) / floor };
+  const rate = state.commRate != null ? state.commRate : b.rate;   // toggle override
+  const floor = Math.min(price, floor95(land / (1 - COMM_MIN_NET - rate)));
+  return { name: b.name, bandRate: b.rate, rate, floor,
+    repList: price * rate, netList: (price - land - price * rate) / price,
+    repFloor: floor * rate, netFloor: (floor - land - floor * rate) / floor };
 }
 
 function shipToOptions(p) {
@@ -253,12 +255,13 @@ function renderDetail() {
     <div class="sec-h">Volume quote — hypothetical bulk</div>
     <table class="tiers"><tr><th>Qty</th><th>Unit price</th><th>Off</th><th>Margin</th></tr>${vtRows}</table>
     <div class="rec-why" style="margin-top:8px">Top table = your <b>live Kaching bundle</b> discounts off the DTC single price (what customers actually pay). Bottom = <b>hypothetical bulk quotes</b> for B2B; <b>*</b> = clamped to the ${pct(DATA.guardrails.min_tier_gm)} margin floor so a quote never goes underwater.</div>
-    ${cm ? `<div class="sec-h">Sales-rep commission — ${cm.name} · ${Math.round(cm.rate * 100)}% of sales</div>
-    <table class="tiers"><tr><th></th><th>Sale price</th><th>Rep earns</th><th>You net</th></tr>
+    ${cm ? `<div class="sec-h">Sales-rep commission — ${cm.name}</div>
+    <div class="comm-toggle">${COMM_OPTS.map(r => `<button class="ctog ${((state.commRate == null && r == null) || state.commRate === r) ? 'on' : ''}" data-cr="${r == null ? '' : r}">${r == null ? 'Schedule ' + Math.round(cm.bandRate * 100) + '%' : Math.round(r * 100) + '%'}</button>`).join('')}</div>
+    <table class="tiers"><tr><th>@ ${Math.round(cm.rate * 100)}%</th><th>Sale price</th><th>Rep earns</th><th>You net</th></tr>
       <tr><td>At list</td><td>${money(p.current_price)}</td><td>${money(cm.repList)}</td><td>${pct(cm.netList)}</td></tr>
       <tr><td>Floor <span class="tmute">min quote</span></td><td>${money(cm.floor)}</td><td>${money(cm.repFloor)}</td><td>${pct(cm.netFloor)}</td></tr>
     </table>
-    <div class="rec-why" style="margin-top:8px">Rep earns <b>${Math.round(cm.rate * 100)}% of net sales</b> — reps see only the rate + floor, never your cost. <b>Floor ${money(cm.floor)}</b> is the lowest a rep may quote without approval; you still net ~20% after commission. Full rate card + all floors are in <b>COMMISSION_PROGRAM.md</b>.</div>` : ''}
+    <div class="rec-why" style="margin-top:8px">Tap a rate to see how your net margin varies. This category's <b>Schedule A rate is ${Math.round(cm.bandRate * 100)}%</b>${state.commRate != null && state.commRate !== cm.bandRate ? ` (exploring ${Math.round(cm.rate * 100)}%)` : ''}. Reps see only the rate + floor, never your cost; <b>Floor ${money(cm.floor)}</b> keeps you ~20% net after commission. Full card in <b>COMMISSION_PROGRAM.md</b>.</div>` : ''}
     <div class="sec-h">Cost breakdown — ${nm}</div>
     <div class="kv"><span class="muted">Product cost</span><span>${money(productCost)}</span></div>
     <div class="kv"><span class="muted">Shipping (selected route)</span><span>${money(routes[DETAIL.sel].shipping)}</span></div>
@@ -280,6 +283,8 @@ function wire() {
   $('#detail').addEventListener('click', e => {
     const chip = e.target.closest('.route-chip');
     if (chip) { selectRoute(+chip.dataset.r); return; }
+    const ct = e.target.closest('.ctog');
+    if (ct) { state.commRate = ct.dataset.cr === '' ? null : +ct.dataset.cr; const s = $('#detail-card').scrollTop; renderDetail(); $('#detail-card').scrollTop = s; return; }
     if (e.target.closest('[data-close]')) closeDetail();
   });
   $('#detail').addEventListener('change', e => {
